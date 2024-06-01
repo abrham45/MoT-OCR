@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from rest_framework import serializers
 import pytesseract
 import pytesseract
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+#pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 from PIL import Image
 import os
 from rest_framework import status

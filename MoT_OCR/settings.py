@@ -31,7 +31,7 @@ INSTALLED_APPS = [
 
     #External Libraries
     'rest_framework',
-    'drf_yasg',
+    
 
 ]
 
