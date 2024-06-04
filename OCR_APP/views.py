@@ -1,6 +1,5 @@
 import pytesseract
 import os
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
@@ -8,6 +7,8 @@ from rest_framework import status
 from fuzzywuzzy import fuzz
 from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
+
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
