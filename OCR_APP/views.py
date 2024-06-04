@@ -8,8 +8,6 @@ from fuzzywuzzy import fuzz
 from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
 
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
