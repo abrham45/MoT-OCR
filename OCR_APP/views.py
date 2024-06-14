@@ -7,6 +7,12 @@ from rest_framework import status
 from fuzzywuzzy import fuzz
 from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
+import requests
+from io import BytesIO
+
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+
+
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
@@ -15,16 +21,26 @@ class OCRCheckView(APIView):
         serializer = OCRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        image_path = serializer.validated_data['image_path']
+        image_path_or_url = serializer.validated_data['image_path']
         user_number = serializer.validated_data['library_number'].upper()
 
-        if not self.is_valid_image(image_path):
-            return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if the input is a URL
+        if image_path_or_url.startswith(('http://', 'https://')):
+            try:
+                response = requests.get(image_path_or_url)
+                response.raise_for_status()  # Raise exception if invalid response
+                img = Image.open(BytesIO(response.content))
+            except Exception as e:
+                return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # Existing logic for local file paths
+            if not self.is_valid_image(image_path_or_url):
+                return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            img = Image.open(image_path)
-        except (IOError, OSError) as e:
-            return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                img = Image.open(image_path_or_url)
+            except (IOError, OSError) as e:
+                return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         text = self.perform_ocr(img)
         print(text)
