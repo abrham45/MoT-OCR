@@ -12,8 +12,6 @@ from io import BytesIO
 
 pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
-
-
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
@@ -43,7 +41,7 @@ class OCRCheckView(APIView):
                 return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         text = self.perform_ocr(img)
-        print(text)
+        
         response_data = self.analyze_text(text, user_number)
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -55,27 +53,31 @@ class OCRCheckView(APIView):
     @staticmethod
     def perform_ocr(img):
         # Ensure that the Amharic language is supported in your Tesseract installation
-        config = '--psm 1 -l eng+amh'
+        config = r'--oem 3 --psm 5 -l amh+eng'
         return pytesseract.image_to_string(img, config=config)
 
     @staticmethod
     def analyze_text(text, user_number):
         important_components = [
-            "የሻንሲ ቁጥር",  # Chassis Number
-            "Motor Number",
+            "ዜግነት",  # Chassis Number
+            "ክልል",
             "የሰሌዳ ቁጥር",  # Plate Number
-            "የተሽከርካሪው ዓይነት"  # Type of Vehicle
+            "የተሽከርካሪው ዓይነት" 
+              # Type of Vehicle
         ]
+        print(text)
         components_found = []
 
         for component in important_components:
             # Using fuzzy matching to find the best match for each component in the text
             match_percentage = fuzz.partial_ratio(component, text)
-            if match_percentage >= 90:
+            print(match_percentage)
+            if match_percentage >= 80:
                 components_found.append(component)
 
         at_least_two_found = len(components_found) >= 2
-        number_exists = user_number in text  # Assuming exact match for user_number
+        number_exists = any(fuzz.partial_ratio(str(user_number), part) >= 90 for part in text.split()) # Assuming exact match for user_number
+  
 
         return {
             "at_least_two_components_found": at_least_two_found,
