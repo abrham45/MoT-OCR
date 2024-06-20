@@ -10,7 +10,7 @@ from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same 
 import requests
 from io import BytesIO
 
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
@@ -67,21 +67,27 @@ class OCRCheckView(APIView):
         ]
         print(text)
         components_found = []
-
+        number_exists = False
+        components_not_found = []
+    
         for component in important_components:
             # Using fuzzy matching to find the best match for each component in the text
             match_percentage = fuzz.partial_ratio(component, text)
             print(match_percentage)
             if match_percentage >= 80:
                 components_found.append(component)
+            else:
+                components_not_found.append(component)
 
         at_least_two_found = len(components_found) >= 2
-        number_exists = any(fuzz.partial_ratio(str(user_number), part) >= 90 for part in text.split()) # Assuming exact match for user_number
+        if at_least_two_found: 
+             number_exists = number_exists = user_number in text # Assuming exact match for user_number
   
 
         return {
             "at_least_two_components_found": at_least_two_found,
             "components_found": components_found,  # List of components found with fuzzy matching
+            "components_not_found": components_not_found,
             "number_exists": number_exists
         }
 
