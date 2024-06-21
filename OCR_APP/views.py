@@ -9,8 +9,10 @@ from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
 import requests
 from io import BytesIO
+from django.core.cache import cache
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
@@ -22,33 +24,42 @@ class OCRCheckView(APIView):
         image_path_or_url = serializer.validated_data['image_path']
         user_number = serializer.validated_data['library_number'].upper()
 
-        # Check if the input is a URL
-        if image_path_or_url.startswith(('http://', 'https://')):
-            try:
-                response = requests.get(image_path_or_url)
-                response.raise_for_status()  # Raise exception if invalid response
-                img = Image.open(BytesIO(response.content))
-            except Exception as e:
-                return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+        # Check if the image is already in the cache
+        cached_image = cache.get(image_path_or_url)
+        if cached_image:
+            img = cached_image
         else:
-            # Existing logic for local file paths
-            if not self.is_valid_image(image_path_or_url):
-                return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
+            # Check if the input is a URL
+            if image_path_or_url.startswith(('http://', 'https://')):
+                try:
+                    response = requests.get(image_path_or_url)
+                    response.raise_for_status()  # Raise exception if invalid response
+                    img = Image.open(BytesIO(response.content))
+                except Exception as e:
+                    return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # Existing logic for local file paths
+                if not self.is_valid_image(image_path_or_url):
+                    return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
 
-            try:
-                img = Image.open(image_path_or_url)
-            except (IOError, OSError) as e:
-                return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                try:
+                    img = Image.open(image_path_or_url)
+                except (IOError, OSError) as e:
+                    return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Preprocess the image and store it in the cache
+         
+            cache.set(image_path_or_url, img)
 
         text = self.perform_ocr(img)
-        
         response_data = self.analyze_text(text, user_number)
 
         return Response(response_data, status=status.HTTP_200_OK)
 
     @staticmethod
     def is_valid_image(image_path):
-        return os.path.isfile(image_path) and image_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))
+        return os.path.isfile(image_path) and image_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp','.pdf'))
+
 
     @staticmethod
     def perform_ocr(img):
@@ -65,7 +76,7 @@ class OCRCheckView(APIView):
             "የተሽከርካሪው ዓይነት" 
               # Type of Vehicle
         ]
-        print(text)
+      
         components_found = []
         number_exists = False
         components_not_found = []
