@@ -9,57 +9,60 @@ from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
 import requests
 from io import BytesIO
-from django.core.cache import cache
+from rapidfuzz import process
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+from time import time
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
     def post(self, request, *args, **kwargs):
+        start_time = time()  # Record the start time
+
         serializer = OCRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         image_path_or_url = serializer.validated_data['image_path']
         user_number = serializer.validated_data['library_number'].upper()
 
-        # Check if the image is already in the cache
-        cached_image = cache.get(image_path_or_url)
-        if cached_image:
-            img = cached_image
+        # Check if the input is a URL
+        if image_path_or_url.startswith(('http://', 'https://')):
+            try:
+                response = requests.get(image_path_or_url)
+                response.raise_for_status()  # Raise exception if invalid response
+                img = Image.open(BytesIO(response.content))
+            except Exception as e:
+                end_time = time()  # Record the end time
+                response_time = end_time - start_time  # Calculate the response time
+                return Response({"error": f"Failed to download or open image from URL: {str(e)}", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Check if the input is a URL
-            if image_path_or_url.startswith(('http://', 'https://')):
-                try:
-                    response = requests.get(image_path_or_url)
-                    response.raise_for_status()  # Raise exception if invalid response
-                    img = Image.open(BytesIO(response.content))
-                except Exception as e:
-                    return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-            else:
-                # Existing logic for local file paths
-                if not self.is_valid_image(image_path_or_url):
-                    return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
+            # Existing logic for local file paths
+            if not self.is_valid_image(image_path_or_url):
+                end_time = time()  # Record the end time
+                response_time = end_time - start_time  # Calculate the response time
+                return Response({"error": "Invalid image path or unsupported format", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
 
-                try:
-                    img = Image.open(image_path_or_url)
-                except (IOError, OSError) as e:
-                    return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
-
-            # Preprocess the image and store it in the cache
-         
-            cache.set(image_path_or_url, img)
+            try:
+                img = Image.open(image_path_or_url)
+            except (IOError, OSError) as e:
+                end_time = time()  # Record the end time
+                response_time = end_time - start_time  # Calculate the response time
+                return Response({"error": f"Invalid image: {str(e)}", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
 
         text = self.perform_ocr(img)
+        
         response_data = self.analyze_text(text, user_number)
 
-        return Response(response_data, status=status.HTTP_200_OK)
+        end_time = time()  # Record the end time
+        response_time = end_time - start_time  # Calculate the response time
+
+        return Response({"response_data": response_data, "response_time": response_time}, status=status.HTTP_200_OK)
 
     @staticmethod
     def is_valid_image(image_path):
-        return os.path.isfile(image_path) and image_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp','.pdf'))
-
+        return os.path.isfile(image_path) and image_path.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp'))
 
     @staticmethod
     def perform_ocr(img):
@@ -76,16 +79,15 @@ class OCRCheckView(APIView):
             "የተሽከርካሪው ዓይነት" 
               # Type of Vehicle
         ]
-      
+        print(text)
         components_found = []
         number_exists = False
         components_not_found = []
     
         for component in important_components:
-            # Using fuzzy matching to find the best match for each component in the text
-            match_percentage = fuzz.partial_ratio(component, text)
-            print(match_percentage)
-            if match_percentage >= 80:
+        # Using RapidFuzz to find the best match for each component in the text
+            match = process.extractOne(component, text.split(), score_cutoff=80)
+            if match:
                 components_found.append(component)
             else:
                 components_not_found.append(component)
@@ -101,4 +103,3 @@ class OCRCheckView(APIView):
             "components_not_found": components_not_found,
             "number_exists": number_exists
         }
-
