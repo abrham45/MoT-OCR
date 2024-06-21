@@ -9,18 +9,13 @@ from PIL import Image
 from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
 import requests
 from io import BytesIO
-from rapidfuzz import process
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-
-from time import time
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
     def post(self, request, *args, **kwargs):
-        start_time = time()  # Record the start time
-
         serializer = OCRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -34,31 +29,22 @@ class OCRCheckView(APIView):
                 response.raise_for_status()  # Raise exception if invalid response
                 img = Image.open(BytesIO(response.content))
             except Exception as e:
-                end_time = time()  # Record the end time
-                response_time = end_time - start_time  # Calculate the response time
-                return Response({"error": f"Failed to download or open image from URL: {str(e)}", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
         else:
             # Existing logic for local file paths
             if not self.is_valid_image(image_path_or_url):
-                end_time = time()  # Record the end time
-                response_time = end_time - start_time  # Calculate the response time
-                return Response({"error": "Invalid image path or unsupported format", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 img = Image.open(image_path_or_url)
             except (IOError, OSError) as e:
-                end_time = time()  # Record the end time
-                response_time = end_time - start_time  # Calculate the response time
-                return Response({"error": f"Invalid image: {str(e)}", "response_time": response_time}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         text = self.perform_ocr(img)
         
         response_data = self.analyze_text(text, user_number)
 
-        end_time = time()  # Record the end time
-        response_time = end_time - start_time  # Calculate the response time
-
-        return Response({"response_data": response_data, "response_time": response_time}, status=status.HTTP_200_OK)
+        return Response(response_data, status=status.HTTP_200_OK)
 
     @staticmethod
     def is_valid_image(image_path):
@@ -85,9 +71,10 @@ class OCRCheckView(APIView):
         components_not_found = []
     
         for component in important_components:
-        # Using RapidFuzz to find the best match for each component in the text
-            match = process.extractOne(component, text.split(), score_cutoff=80)
-            if match:
+            # Using fuzzy matching to find the best match for each component in the text
+            match_percentage = fuzz.partial_ratio(component, text)
+            print(match_percentage)
+            if match_percentage >= 80:
                 components_found.append(component)
             else:
                 components_not_found.append(component)
@@ -103,3 +90,4 @@ class OCRCheckView(APIView):
             "components_not_found": components_not_found,
             "number_exists": number_exists
         }
+
