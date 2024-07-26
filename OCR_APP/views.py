@@ -12,6 +12,7 @@ from io import BytesIO
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
+
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
@@ -29,19 +30,30 @@ class OCRCheckView(APIView):
                 response.raise_for_status()  # Raise exception if invalid response
                 img = Image.open(BytesIO(response.content))
             except Exception as e:
-                return Response({"error": f"Failed to download or open image from URL: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": f"Failed to download or open image from URL: {str(e)}"},
+                                status=status.HTTP_400_BAD_REQUEST)
         else:
             # Existing logic for local file paths
             if not self.is_valid_image(image_path_or_url):
-                return Response({"error": "Invalid image path or unsupported format"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Invalid image path or unsupported format"},
+                                status=status.HTTP_400_BAD_REQUEST)
 
             try:
                 img = Image.open(image_path_or_url)
             except (IOError, OSError) as e:
                 return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Perform OSD for orientation detection
+        osd_data = pytesseract.image_to_osd(img)
+        orientation = int(osd_data.split('\n')[1].split(':')[1])
+
+        # Rotate image based on detected orientation (if needed)
+        if orientation not in (0, -1):  # Check for valid orientations
+            angle = (360 - orientation) % 360  # Calculate rotation angle
+            img = img.rotate(angle, expand=True)  # Rotate and expand to avoid cropping
+
         text = self.perform_ocr(img)
-        
+
         response_data = self.analyze_text(text, user_number)
 
         return Response(response_data, status=status.HTTP_200_OK)
@@ -62,14 +74,13 @@ class OCRCheckView(APIView):
             "ዜግነት",  # Chassis Number
             "ክልል",
             "የሰሌዳ ቁጥር",  # Plate Number
-            "የተሽከርካሪው ዓይነት" 
-              # Type of Vehicle
+            "የተሽከርካሪው ዓይነት"  # Type of Vehicle
         ]
         print(text)
         components_found = []
         number_exists = False
         components_not_found = []
-    
+
         for component in important_components:
             # Using fuzzy matching to find the best match for each component in the text
             match_percentage = fuzz.partial_ratio(component, text)
@@ -80,11 +91,11 @@ class OCRCheckView(APIView):
                 components_not_found.append(component)
 
         at_least_two_found = len(components_found) >= 2
-        if at_least_two_found: 
-             number_exists = number_exists = user_number in text # Assuming exact match for user_number
-  
+        if at_least_two_found:
+            number_exists = user_number in text  # Assuming
 
         return {
+            
             "at_least_two_components_found": at_least_two_found,
             "components_found": components_found,  # List of components found with fuzzy matching
             "components_not_found": components_not_found,
