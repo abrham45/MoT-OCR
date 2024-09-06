@@ -92,7 +92,12 @@ class OCRCheckView(APIView):
 
         at_least_two_found = len(components_found) >= 2
         if at_least_two_found:
-            number_exists = user_number in text  # Assuming
+            match_percentage_two = fuzz.partial_ratio(user_number, text)
+            if match_percentage_two >= 30:
+                return True
+            else:
+                return False
+           
 
         return {
             
