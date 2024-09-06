@@ -10,7 +10,7 @@ from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same 
 import requests
 from io import BytesIO
 
-pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
 
 class OCRCheckView(APIView):
