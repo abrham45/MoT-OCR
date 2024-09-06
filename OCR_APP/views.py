@@ -44,13 +44,13 @@ class OCRCheckView(APIView):
                 return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
         # Perform OSD for orientation detection
-        osd_data = pytesseract.image_to_osd(img)
-        orientation = int(osd_data.split('\n')[1].split(':')[1])
+        # osd_data = pytesseract.image_to_osd(img)
+        # orientation = int(osd_data.split('\n')[1].split(':')[1])
 
-        # Rotate image based on detected orientation (if needed)
-        if orientation not in (0, -1):  # Check for valid orientations
-            angle = (360 - orientation) % 360  # Calculate rotation angle
-            img = img.rotate(angle, expand=True)  # Rotate and expand to avoid cropping
+        # # Rotate image based on detected orientation (if needed)
+        # if orientation not in (0, -1):  # Check for valid orientations
+        #     angle = (360 - orientation) % 360  # Calculate rotation angle
+        #     img = img.rotate(angle, expand=True)  # Rotate and expand to avoid cropping
 
         text = self.perform_ocr(img)
 
