@@ -78,14 +78,13 @@ class OCRCheckView(APIView):
         ]
         print(text)
         components_found = []
-        number_exists = False
         components_not_found = []
 
         for component in important_components:
             # Using fuzzy matching to find the best match for each component in the text
             match_percentage = fuzz.partial_ratio(component, text)
             print(match_percentage)
-            if match_percentage >= 80:
+            if match_percentage >= 65:
                 components_found.append(component)
             else:
                 components_not_found.append(component)
