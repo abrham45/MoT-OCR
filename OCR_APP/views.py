@@ -1,17 +1,15 @@
-import pytesseract
-import os
 from rest_framework.views import APIView
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 from rest_framework import status
-from fuzzywuzzy import fuzz
 from PIL import Image
-from .serializers import OCRSerializer  # Assuming OCRSerializer is in the same directory
-import requests
 from io import BytesIO
-
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-
+import requests
+import os
+import pytesseract
+from fuzzywuzzy import fuzz
+from .serializers import OCRSerializer
+from .component_selector import get_important_components  # Import the function
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
@@ -21,7 +19,10 @@ class OCRCheckView(APIView):
         serializer.is_valid(raise_exception=True)
 
         image_path_or_url = serializer.validated_data['image_path']
-        user_number = serializer.validated_data['library_number'].upper()
+        payload = serializer.validated_data['payload']
+        user_number = payload['library_number'].upper()
+        code = payload['code'].upper()
+        #plate_number = payload.get('plate_number', '').upper()
 
         # Check if the input is a URL
         if image_path_or_url.startswith(('http://', 'https://')):
@@ -43,18 +44,9 @@ class OCRCheckView(APIView):
             except (IOError, OSError) as e:
                 return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Perform OSD for orientation detection
-        # osd_data = pytesseract.image_to_osd(img)
-        # orientation = int(osd_data.split('\n')[1].split(':')[1])
-
-        # # Rotate image based on detected orientation (if needed)
-        # if orientation not in (0, -1):  # Check for valid orientations
-        #     angle = (360 - orientation) % 360  # Calculate rotation angle
-        #     img = img.rotate(angle, expand=True)  # Rotate and expand to avoid cropping
-
         text = self.perform_ocr(img)
 
-        response_data = self.analyze_text(text, user_number)
+        response_data = self.analyze_text(text, user_number, code)
 
         return Response(response_data, status=status.HTTP_200_OK)
 
@@ -69,13 +61,10 @@ class OCRCheckView(APIView):
         return pytesseract.image_to_string(img, config=config)
 
     @staticmethod
-    def analyze_text(text, user_number):
-        important_components = [
-            "ዜግነት",  # Chassis Number
-            "ክልል",
-            "የሰሌዳ ቁጥር",  # Plate Number
-            "የተሽከርካሪው ዓይነት"  # Type of Vehicle
-        ]
+    def analyze_text(text, user_number, code):
+        # Get important components based on the code
+        important_components = get_important_components(code)
+
         print(text)
         components_found = []
         components_not_found = []
@@ -93,20 +82,16 @@ class OCRCheckView(APIView):
         if at_least_two_found:
             match_percentage_two = fuzz.partial_ratio(user_number, text)
             if match_percentage_two >= 30:
-                  return {
-                                "at_least_two_components_found": at_least_two_found,
-                                "components_found": components_found,  # List of components found with fuzzy matching
-                                "components_not_found": components_not_found,
-                                "number_exists": True
-                        }
-            
+                return {
+                    "at_least_two_components_found": at_least_two_found,
+                    "components_found": components_found,  # List of components found with fuzzy matching
+                    "components_not_found": components_not_found,
+                    "number_exists": True
+                }
             else:
-                 return {
-                                "at_least_two_components_found": at_least_two_found,
-                                "components_found": components_found,  # List of components found with fuzzy matching
-                                "components_not_found": components_not_found,
-                                "number_exists": False
-                        }
-           
-
-      
+                return {
+                    "at_least_two_components_found": at_least_two_found,
+                    "components_found": components_found,  # List of components found with fuzzy matching
+                    "components_not_found": components_not_found,
+                    "number_exists": False
+                }
