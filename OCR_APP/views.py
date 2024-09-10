@@ -9,7 +9,9 @@ import os
 import pytesseract
 from fuzzywuzzy import fuzz
 from .serializers import OCRSerializer
-from .component_selector import get_important_components  # Import the function
+from .important_components import get_important_components  # Import the function
+
+pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
 
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
@@ -44,7 +46,10 @@ class OCRCheckView(APIView):
             except (IOError, OSError) as e:
                 return Response({"error": f"Invalid image: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
 
-        text = self.perform_ocr(img)
+        try:
+            text = self.perform_ocr(img)
+        except Exception as e:
+            return Response({"error": f"Failed to perform OCR: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         response_data = self.analyze_text(text, user_number, code)
 
@@ -79,19 +84,13 @@ class OCRCheckView(APIView):
                 components_not_found.append(component)
 
         at_least_two_found = len(components_found) >= 2
-        if at_least_two_found:
-            match_percentage_two = fuzz.partial_ratio(user_number, text)
-            if match_percentage_two >= 30:
-                return {
-                    "at_least_two_components_found": at_least_two_found,
-                    "components_found": components_found,  # List of components found with fuzzy matching
-                    "components_not_found": components_not_found,
-                    "number_exists": True
-                }
-            else:
-                return {
-                    "at_least_two_components_found": at_least_two_found,
-                    "components_found": components_found,  # List of components found with fuzzy matching
-                    "components_not_found": components_not_found,
-                    "number_exists": False
-                }
+        match_percentage_two = fuzz.partial_ratio(user_number, text)
+        print(match_percentage_two)
+        
+        return {
+            "at_least_two_components_found": at_least_two_found,
+            "components_found": components_found,  # List of components found with fuzzy matching
+            "components_not_found": components_not_found,
+            "number_exists": match_percentage_two >= 20,
+            "per":match_percentage_two
+        }

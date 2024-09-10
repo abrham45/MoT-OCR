@@ -1,7 +1,7 @@
 # component_selector.py
 
 def get_important_components(code):
-    if code == 'library':
+    if code == 'LIBRE': 
         return [
             "ዜግነት",  # Chassis Number
             "ክልል",
