@@ -11,8 +11,8 @@ from fuzzywuzzy import fuzz
 from .serializers import OCRSerializer
 from .important_components import get_important_components  # Import the function
 
-pytesseract.pytesseract.tesseract_cmd = '/usr/bin/tesseract'
-
+# Set the Tesseract command path
+pytesseract.pytesseract.tesseract_cmd =  r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 class OCRCheckView(APIView):
     parser_classes = [JSONParser]
 
@@ -24,7 +24,6 @@ class OCRCheckView(APIView):
         payload = serializer.validated_data['payload']
         user_number = payload['library_number'].upper()
         code = payload['code'].upper()
-        #plate_number = payload.get('plate_number', '').upper()
 
         # Check if the input is a URL
         if image_path_or_url.startswith(('http://', 'https://')):
@@ -36,7 +35,7 @@ class OCRCheckView(APIView):
                 return Response({"error": f"Failed to download or open image from URL: {str(e)}"},
                                 status=status.HTTP_400_BAD_REQUEST)
         else:
-            # Existing logic for local file paths
+            # Validate local file paths
             if not self.is_valid_image(image_path_or_url):
                 return Response({"error": "Invalid image path or unsupported format"},
                                 status=status.HTTP_400_BAD_REQUEST)
@@ -61,8 +60,8 @@ class OCRCheckView(APIView):
 
     @staticmethod
     def perform_ocr(img):
-        # Ensure that the Amharic language is supported in your Tesseract installation
-        config = r'--oem 3 --psm 5 -l amh+eng'
+        # Configure Tesseract to use only Amharic language
+        config = r'--oem 3 --psm 5 -l amh'
         return pytesseract.image_to_string(img, config=config)
 
     @staticmethod
@@ -70,14 +69,12 @@ class OCRCheckView(APIView):
         # Get important components based on the code
         important_components = get_important_components(code)
 
-        print(text)
         components_found = []
         components_not_found = []
 
         for component in important_components:
-            # Using fuzzy matching to find the best match for each component in the text
+            # Use fuzzy matching for Amharic text
             match_percentage = fuzz.partial_ratio(component, text)
-            print(match_percentage)
             if match_percentage >= 65:
                 components_found.append(component)
             else:
@@ -85,12 +82,11 @@ class OCRCheckView(APIView):
 
         at_least_two_found = len(components_found) >= 2
         match_percentage_two = fuzz.partial_ratio(user_number, text)
-        print(match_percentage_two)
-        
+
         return {
             "at_least_two_components_found": at_least_two_found,
             "components_found": components_found,  # List of components found with fuzzy matching
             "components_not_found": components_not_found,
-            "number_exists": match_percentage_two >= 20,
-            "per":match_percentage_two
+            "number_exists": at_least_two_found and match_percentage_two >= 20,
+
         }
