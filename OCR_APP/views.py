@@ -83,10 +83,12 @@ class OCRCheckView(APIView):
         at_least_two_found = len(components_found) >= 2
         match_percentage_two = fuzz.partial_ratio(user_number, text)
 
-        return {
-            "at_least_two_components_found": at_least_two_found,
-            "components_found": components_found,  # List of components found with fuzzy matching
-            "components_not_found": components_not_found,
-            "number_exists": at_least_two_found and match_percentage_two >= 20,
+        response_data = {
+                    "at_least_two_components_found": at_least_two_found,
+                    "components_found": important_components if at_least_two_found else [],
+                    "components_not_found": [] if at_least_two_found else components_not_found,
+                    "number_exists": at_least_two_found and match_percentage_two >= 20,
+                }
 
-        }
+        return response_data
+
